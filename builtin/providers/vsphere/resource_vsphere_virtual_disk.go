@@ -15,12 +15,13 @@ import (
 )
 
 type virtualDisk struct {
-	size        int
-	vmdkPath    string
-	initType    string
-	adapterType string
-	datacenter  string
-	datastore   string
+	size             int
+	vmdkPath         string
+	initType         string
+	adapterType      string
+	datacenter       string
+	datastore        string
+	datastorecluster string
 }
 
 // Define VirtualDisk args
@@ -85,6 +86,12 @@ func resourceVSphereVirtualDisk() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 			},
+
+			"datastoreCluster": &schema.Schema{
+				Type:     schema.TypeString,
+				Optional: true,
+				ForceNew: true,
+			},
 		},
 	}
 }
@@ -115,6 +122,10 @@ func resourceVSphereVirtualDiskCreate(d *schema.ResourceData, meta interface{}) 
 
 	if v, ok := d.GetOk("datastore"); ok {
 		vDisk.datastore = v.(string)
+	}
+
+	if v, ok := d.GetOk("datastorecluster"); ok {
+		vDisk.datastorecluster = v.(string)
 	}
 
 	finder := find.NewFinder(client.Client, true)

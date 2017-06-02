@@ -3,9 +3,11 @@ package vsphere
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform/helper/schema"
 	"github.com/vmware/govmomi"
@@ -83,6 +85,7 @@ type virtualMachine struct {
 	cluster               string
 	resourcePool          string
 	datastore             string
+	datastorecluster      string
 	vcpu                  int32
 	memoryMb              int64
 	memoryAllocation      memoryAllocation
@@ -399,6 +402,11 @@ func resourceVSphereVirtualMachine() *schema.Resource {
 							Optional: true,
 						},
 
+						"datastorecluster": &schema.Schema{
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+
 						"size": &schema.Schema{
 							Type:     schema.TypeInt,
 							Optional: true,
@@ -466,6 +474,12 @@ func resourceVSphereVirtualMachine() *schema.Resource {
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"datastore": &schema.Schema{
+							Type:     schema.TypeString,
+							Required: true,
+							ForceNew: true,
+						},
+
+						"datastorecluster": &schema.Schema{
 							Type:     schema.TypeString,
 							Required: true,
 							ForceNew: true,
@@ -552,9 +566,16 @@ func resourceVSphereVirtualMachineUpdate(d *schema.ResourceData, meta interface{
 
 				var datastore *object.Datastore
 				if disk["datastore"] == "" {
-					datastore, err = finder.DefaultDatastore(context.TODO())
-					if err != nil {
-						return fmt.Errorf("[ERROR] Update Remove Disk - Error finding datastore: %v", err)
+					if disk["datastorecluster"] == "" {
+						datastore, err = finder.DefaultDatastore(context.TODO())
+						if err != nil {
+							return fmt.Errorf("[ERROR] Update Remove Disk - Error finding datastore: %v", err)
+						}
+					} else {
+						datastore, err = getDatastoreFromCluster(disk["datastorecluster"].(string), finder)
+						if err != nil {
+							log.Printf("[ERROR] Couldn't get datastore from cluster %s", err)
+						}
 					}
 				} else {
 					datastore, err = finder.Datastore(context.TODO(), disk["datastore"].(string))
@@ -2144,4 +2165,43 @@ func (vm *virtualMachine) setupVirtualMachine(c *govmomi.Client) error {
 		}
 	}
 	return nil
+}
+
+func getDatastoreFromCluster(cluster string, f *find.Finder) (*object.Datastore, error) {
+	ds, err := f.DatastoreList(context.TODO(), "*")
+
+	if err != nil {
+		return nil, err
+	}
+
+	ds_num := len(ds)
+
+	num := randomNumber(ds_num)
+
+	for i := 0; i < ds_num; i++ {
+		ds_split := strings.Split(ds[i].InventoryPath, "/")
+		if stringInSlice(cluster, ds_split) {
+			if i == num {
+				return ds[i], nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("Unable to find datastore")
+}
+
+func randomNumber(ds_len int) int {
+	s1 := rand.NewSource(time.Now().UnixNano())
+	r1 := rand.New(s1)
+
+	return r1.Intn(ds_len)
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
