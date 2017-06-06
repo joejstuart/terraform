@@ -852,9 +852,9 @@ func resourceVSphereVirtualMachineCreate(d *schema.ResourceData, meta interface{
 					vm.datastore = v
 				}
 
-                if v, ok := disk["datastorecluster"].(string); ok && v != "" {
-                    vm.datastorecluster = v
-                }
+				if v, ok := disk["datastorecluster"].(string); ok && v != "" {
+					vm.datastorecluster = v
+				}
 
 				if v, ok := disk["size"].(int); ok && v != 0 {
 					if v, ok := disk["template"].(string); ok && v != "" {
@@ -2154,28 +2154,31 @@ func (vm *virtualMachine) setupVirtualMachine(c *govmomi.Client) error {
 	return nil
 }
 
-func findDataStore(vm VirtualMachine, f *find.finder) (*object.Datastore, error) {
+func findDataStore(vm virtualMachine, f *find.Finder) (*object.Datastore, error) {
 
-    var datastore *object.Datastore
-    if vm.datastore == "" {
-        if vm.datastorecluster == "" {
-            datastore, err = finder.DefaultDatastore(context.TODO())
-            if err != nil {
-                return fmt.Errorf("[ERROR] Update Remove Disk - Error finding datastore: %v", err)
-            }
-        } else {
-            datastore, err = getDatastoreFromCluster(vm.datastorecluster, finder)
-            if err != nil {
-                log.Printf("[ERROR] Couldn't get datastore from cluster %s", err)
-            }
-        }
-    } else {
-        datastore, err = finder.Datastore(context.TODO(), vm.datastore)
-        if err != nil {
-            log.Printf("[ERROR] Couldn't find datastore %v.  %s", vm.datastore, err)
-            return err
-        }
-    }
+	//var datastore *object.Datastore
+	if vm.datastore == "" {
+		if vm.datastorecluster == "" {
+			datastore, err := f.DefaultDatastore(context.TODO())
+			if err != nil {
+				return nil, fmt.Errorf("[ERROR] Update Remove Disk - Error finding datastore: %v", err)
+			}
+			return datastore, nil
+		} else {
+			datastore, err := getDatastoreFromCluster(vm.datastorecluster, f)
+			if err != nil {
+				return nil, fmt.Errorf("[ERROR] Couldn't get datastore from cluster %s", err)
+			}
+			return datastore, nil
+		}
+	} else {
+		datastore, err := f.Datastore(context.TODO(), vm.datastore)
+		if err != nil {
+			return nil, fmt.Errorf("[ERROR] Couldn't find datastore %v.  %s", vm.datastore, err)
+		}
+		return datastore, nil
+	}
+
 }
 
 func getDatastoreFromCluster(cluster string, f *find.Finder) (*object.Datastore, error) {
